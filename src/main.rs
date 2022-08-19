@@ -7,10 +7,10 @@ use axum::{
     routing::{get, get_service, post},
     Router, Server,
 };
-use entity::post;
+use entity::posts;
 use flash::{get_flash_cookie, post_response, PostResponse};
 use migration::{Migrator, MigratorTrait};
-use post::Entity as Post;
+use posts::Entity as Posts;
 use sea_orm::{prelude::*, Database, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -90,8 +90,8 @@ async fn list_posts(
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
     let page = params.page.unwrap_or(1);
     let posts_per_page = params.posts_per_page.unwrap_or(5);
-    let paginator = Post::find()
-        .order_by_asc(post::Column::Id)
+    let paginator = Posts::find()
+        .order_by_asc(posts::Column::Id)
         .paginate(conn, posts_per_page);
     let num_pages = paginator.num_pages().await.ok().unwrap();
     let posts = paginator
@@ -129,12 +129,12 @@ async fn new_post(
 
 async fn create_post(
     Extension(ref conn): Extension<DatabaseConnection>,
-    form: Form<post::Model>,
+    form: Form<posts::Model>,
     mut cookies: Cookies,
 ) -> Result<PostResponse, (StatusCode, &'static str)> {
     let model = form.0;
 
-    post::ActiveModel {
+    posts::ActiveModel {
         title: Set(model.title.to_owned()),
         text: Set(model.text.to_owned()),
         ..Default::default()
@@ -156,7 +156,7 @@ async fn edit_post(
     Extension(ref conn): Extension<DatabaseConnection>,
     Path(id): Path<i32>,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
-    let post: post::Model = Post::find_by_id(id)
+    let post: posts::Model = Posts::find_by_id(id)
         .one(conn)
         .await
         .expect("could not find post")
@@ -175,12 +175,12 @@ async fn edit_post(
 async fn update_post(
     Extension(ref conn): Extension<DatabaseConnection>,
     Path(id): Path<i32>,
-    form: Form<post::Model>,
+    form: Form<posts::Model>,
     mut cookies: Cookies,
 ) -> Result<PostResponse, (StatusCode, String)> {
     let model = form.0;
 
-    post::ActiveModel {
+    posts::ActiveModel {
         id: Set(id),
         title: Set(model.title.to_owned()),
         text: Set(model.text.to_owned()),
@@ -202,7 +202,7 @@ async fn delete_post(
     Path(id): Path<i32>,
     mut cookies: Cookies,
 ) -> Result<PostResponse, (StatusCode, &'static str)> {
-    let post: post::ActiveModel = Post::find_by_id(id)
+    let post: posts::ActiveModel = Posts::find_by_id(id)
         .one(conn)
         .await
         .unwrap()
