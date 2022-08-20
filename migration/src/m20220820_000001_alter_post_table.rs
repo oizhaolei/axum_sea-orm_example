@@ -26,7 +26,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Posts::Table)
-                    .drop_column(Posts::NewCol)
+                    .drop_column(Posts::NewCol) // sqlite not support drop column
                     .to_owned(),
             )
             .await

@@ -3,7 +3,7 @@ mod post_service;
 use axum::{
     extract::Extension,
     http::StatusCode,
-    routing::{get, get_service, post},
+    routing::{delete, get, get_service, patch, post},
     Router, Server,
 };
 
@@ -39,6 +39,9 @@ async fn main() -> anyhow::Result<()> {
     // let state = AppState { templates, conn };
 
     let app = Router::new()
+        .route("/api/", get(api_list_posts).post(api_create_post))
+        .route("/api/:id", patch(api_update_post))
+        .route("/api/:id", delete(api_delete_post))
         .route("/", get(list_posts).post(create_post))
         .route("/:id", get(edit_post).post(update_post))
         .route("/new", get(new_post))
