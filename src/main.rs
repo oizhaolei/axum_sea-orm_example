@@ -38,7 +38,20 @@ async fn main() -> anyhow::Result<()> {
         .expect("Tera initialization failed");
     // let state = AppState { templates, conn };
 
-    let app = Router::new()
+    let addr = SocketAddr::from_str(&server_url).unwrap();
+    let app = app().layer(
+        ServiceBuilder::new()
+            .layer(CookieManagerLayer::new())
+            .layer(Extension(conn))
+            .layer(Extension(templates)),
+    );
+    Server::bind(&addr).serve(app.into_make_service()).await?;
+
+    Ok(())
+}
+fn app() -> Router {
+    Router::new()
+        .route("/hello/", get(|| async { "Hello, World!" }))
         .route("/api/", get(api_list_posts).post(api_create_post))
         .route("/api/:id", patch(api_update_post))
         .route("/api/:id", delete(api_delete_post))
@@ -59,15 +72,75 @@ async fn main() -> anyhow::Result<()> {
                 )
             }),
         )
-        .layer(
-            ServiceBuilder::new()
-                .layer(CookieManagerLayer::new())
-                .layer(Extension(conn))
-                .layer(Extension(templates)),
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use axum::{
+        body::Body,
+        http::{self, Request, StatusCode},
+    };
+    use serde_json::{json, Value};
+    use tower::ServiceExt; // for `oneshot` and `ready`
+
+    async fn mock_app() -> Router {
+        let conn = Database::connect("sqlite::memory:".to_string())
+            .await
+            .expect("Database connection failed");
+        Migrator::up(&conn, None).await.unwrap();
+        app().layer(ServiceBuilder::new().layer(Extension(conn)))
+    }
+
+    #[tokio::test]
+    async fn hello_world() {
+        let conn = Database::connect("sqlite::memory:".to_string())
+            .await
+            .expect("Database connection failed");
+        Migrator::up(&conn, None).await.unwrap();
+        let app = mock_app().await;
+
+        // `Router` implements `tower::Service<Request<Body>>` so we can
+        // call it like any tower service, no need to run an HTTP server.
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/hello/")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body, "Hello, World!");
+        assert_eq!(&body[..], b"Hello, World!");
+    }
+    #[tokio::test]
+    async fn json() {
+        let app = mock_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::GET)
+                    .uri("/api/")
+                    .header(http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body,
+            json!({"num_pages": 0, "page": 1, "posts": [], "posts_per_page": 5})
         );
-
-    let addr = SocketAddr::from_str(&server_url).unwrap();
-    Server::bind(&addr).serve(app.into_make_service()).await?;
-
-    Ok(())
+    }
 }
