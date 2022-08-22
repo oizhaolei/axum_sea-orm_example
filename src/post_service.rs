@@ -310,3 +310,58 @@ pub async fn delete_post(
 
     Ok(post_response(&mut cookies, data))
 }
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use migration::{Migrator, MigratorTrait};
+    use sea_orm::Database;
+    use serde_json::json;
+    #[tokio::test]
+    async fn hello_world() {
+        let conn = Database::connect("sqlite::memory:".to_string())
+            .await
+            .expect("Database connection failed");
+        Migrator::up(&conn, None).await.unwrap();
+
+        //list
+        let page = 1;
+        let posts_per_page = 5;
+        let paginator = Posts::find()
+            .order_by_asc(posts::Column::Id)
+            .paginate(&conn, posts_per_page);
+        let posts = paginator
+            .fetch_page(page - 1)
+            .await
+            .expect("could not retrieve posts");
+        assert_eq!(0, posts.len());
+        assert_eq!(json!(posts), json!([]));
+
+        // create
+        posts::ActiveModel {
+            title: Set("title11".to_owned()),
+            text: Set("text11".to_owned()),
+            new_col: Set(17),
+            ..Default::default()
+        }
+        .save(&conn)
+        .await
+        .expect("could not insert post");
+
+        //list
+        let page = 1;
+        let posts_per_page = 5;
+        let paginator = Posts::find()
+            .order_by_asc(posts::Column::Id)
+            .paginate(&conn, posts_per_page);
+        let posts = paginator
+            .fetch_page(page - 1)
+            .await
+            .expect("could not retrieve posts");
+        assert_eq!(1, posts.len());
+        assert_eq!(posts[0].title, "title11");
+        assert_eq!(posts[0].text, "text11");
+        assert_eq!(posts[0].new_col, 17);
+    }
+}
