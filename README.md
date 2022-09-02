@@ -1,5 +1,3 @@
-![screenshot](Screenshot.png)
-
 # Axum with SeaORM example app
 
 1. Modify the `DATABASE_URL` var in `.env` to point to your chosen database
