@@ -4,3 +4,4 @@ pub mod prelude;
 
 pub mod cake;
 pub mod posts;
+pub mod user;

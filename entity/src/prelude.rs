@@ -2,3 +2,4 @@
 
 pub use super::cake::Entity as Cake;
 pub use super::posts::Entity as Posts;
+pub use super::user::Entity as User;
