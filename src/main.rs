@@ -2,7 +2,7 @@ mod post_service;
 
 use axum::{
     extract::Extension,
-    routing::{delete, get, patch},
+    routing::{delete, get, patch, post},
     Router, Server,
 };
 
@@ -15,6 +15,31 @@ use std::str::FromStr;
 use std::{env, net::SocketAddr};
 use tokio::signal;
 use tower::ServiceBuilder;
+// Quick instructions
+//
+// - get an authorization token:
+//
+// curl -s \
+//     -w '\n' \
+//     -H 'Content-Type: application/json' \
+//     -d '{"client_id":"foo","client_secret":"bar"}' \
+//     http://localhost:8000/authorize
+//
+// - visit the protected area using the authorized token
+//
+// curl -s \
+//     -w '\n' \
+//     -H 'Content-Type: application/json' \
+//     -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiQGIuY29tIiwiY29tcGFueSI6IkFDTUUiLCJleHAiOjIwMDAwMDAwMDB9.ULPZ0NLBq9tfHroRgxJJeEYCy0tguZrEwix3fo-2dFc' \
+//      http://localhost:8000/api/\?page\=1\&posts_per_page\=100
+//
+// - try to visit the protected area using an invalid token
+//
+// curl -s \
+//     -w '\n' \
+//     -H 'Content-Type: application/json' \
+//     -H 'Authorization: Bearer blahblahblah' \
+//     http://localhost:8000/protected
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -45,9 +70,11 @@ async fn main() -> anyhow::Result<()> {
 fn app() -> Router {
     Router::new()
         .route("/hello/", get(|| async { "Hello, World!" }))
-        .route("/api/", get(api_list_posts).post(api_create_post))
+        .route("/api/", get(api_list_posts))
+        .route("/api/", post(api_create_post))
         .route("/api/:id", patch(api_update_post))
         .route("/api/:id", delete(api_delete_post))
+        .route("/authorize", post(login))
 }
 async fn shutdown_signal() {
     let ctrl_c = async {
