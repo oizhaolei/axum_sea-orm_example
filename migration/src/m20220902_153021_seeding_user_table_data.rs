@@ -1,4 +1,4 @@
-use entity::user::{self};
+use entity::user;
 use sea_orm::DeleteResult;
 use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::entity::*;
@@ -13,7 +13,7 @@ impl MigrationTrait for Migration {
         let db = manager.get_connection();
         user::ActiveModel {
             email: Set("account@example.com".to_owned()),
-            hash: Set("not hashed yet".to_owned()),
+            hash: Set("cLVE7E3Y71+ng0/laMdt9fPPdbb93vE9eeJCjoda21s=".to_owned()), // "secret"
             ..Default::default()
         }
         .insert(db)

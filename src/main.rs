@@ -74,7 +74,7 @@ fn app() -> Router {
         .route("/api/", post(api_create_post))
         .route("/api/:id", patch(api_update_post))
         .route("/api/:id", delete(api_delete_post))
-        .route("/authorize", post(login))
+        .route("/authorize", post(authorize_user))
 }
 async fn shutdown_signal() {
     let ctrl_c = async {

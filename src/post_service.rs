@@ -1,3 +1,6 @@
+use lazy_static::lazy_static;
+use ring::hmac;
+use ring::hmac::Key;
 use std::fmt::Display;
 
 use axum::{
@@ -10,18 +13,21 @@ use axum::{
 use entity::posts::{self, Model};
 use serde_json::json;
 
+use entity::user;
 use hyper::StatusCode;
 use posts::Entity as Posts;
 use sea_orm::{prelude::*, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
+use user::Entity as User;
 
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use once_cell::sync::Lazy;
 
-static KEYS: Lazy<Keys> = Lazy::new(|| {
-    let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
-    Keys::new(secret.as_bytes())
-});
+lazy_static! {
+    static ref SECRET: String = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    static ref KEY: Key = hmac::Key::new(hmac::HMAC_SHA256, SECRET.as_bytes());
+    static ref KEYS: Keys = Keys::new(SECRET.as_bytes());
+}
+
 #[derive(Deserialize)]
 pub struct Params {
     page: Option<usize>,
@@ -200,13 +206,29 @@ mod tests {
     }
 }
 
-pub async fn login(Json(payload): Json<AuthPayload>) -> Result<Json<AuthBody>, AuthError> {
+pub async fn authorize_user(
+    Json(payload): Json<AuthPayload>,
+    Extension(ref conn): Extension<DatabaseConnection>,
+) -> Result<Json<AuthBody>, AuthError> {
     // Check if the user sent the credentials
     if payload.client_id.is_empty() || payload.client_secret.is_empty() {
         return Err(AuthError::MissingCredentials);
     }
     // Here you can check the user credentials from a database
-    if payload.client_id != "foo" || payload.client_secret != "bar" {
+    let user: user::Model = User::find()
+        .filter(user::Column::Email.eq(payload.client_id))
+        .one(conn)
+        .await
+        .expect("could not find user")
+        .unwrap();
+    let tag = hmac::sign(&KEY, payload.client_secret.as_bytes());
+    let client_secret_hash = base64::encode(tag.as_ref());
+    tracing::info!(
+        "user.hash: {:?}, client_secret_hash: {:?}",
+        user.hash,
+        client_secret_hash
+    );
+    if user.hash != client_secret_hash {
         return Err(AuthError::WrongCredentials);
     }
     let claims = Claims {
